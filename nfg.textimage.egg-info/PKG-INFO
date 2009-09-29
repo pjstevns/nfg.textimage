@@ -1,0 +1,11 @@
+Metadata-Version: 1.0
+Name: nfg.textimage
+Version: 0.1dev
+Summary: generate text images
+Home-page: http://www.nfg.nl
+Author: NFG Net Facilities Group BV
+Author-email: support@nfg.nl
+License: GPLv3
+Description: This package can be used to quickly generate images containing text
+Keywords: webfonts libgd
+Platform: UNKNOWN
