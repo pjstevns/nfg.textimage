@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import gd, os
+from PIL import Image, ImageDraw, ImageFont
+import os
 from hashlib import md5
 
 def color2rgb(color):
@@ -40,6 +41,7 @@ class TextImage:
         if self.debug: self.force=self.debug=True
 
         assert(os.path.exists(self.font))
+        self._font = ImageFont.truetype(self.font, int(self.size))
 
     def init_file(self):
         # create filename
@@ -54,7 +56,7 @@ class TextImage:
             hash.update(str(self.width))
             hash.update(str(self.height))
             hash.update(str(self.padding))
-            self.file = str(hash.hexdigest()) + '.png'
+            self.file = str(hash.hexdigest()) + '.gif'
         self.build_path()
 
     def init_dimensions(self, w, h):
@@ -66,13 +68,11 @@ class TextImage:
         self.height=int(max(minheight,self.height))
 
     def init_image(self):
-        self.image = gd.image((self.width,self.height))
         if self.color[0] != '#': self.color='#000000'
         if self.bgcol[0] != '#': self.bgcol='#ffffff'
-        self.color = self.image.colorAllocate(color2rgb(self.color))
-        self.bgcol = self.image.colorAllocate(color2rgb(self.bgcol))
-        self.image.colorTransparent(self.bgcol)
-        self.image.fill((0,0), self.bgcol)
+        self.image = Image.new(mode='RGBA', size=(self.width, self.height), color=color2rgb(self.bgcol))
+        self.image.info['quality'] = 100
+
 
     def get_left(self, linewidth):
         x = 0
@@ -83,17 +83,14 @@ class TextImage:
         return int(x)
 
     def build_path(self):
-        self.file = self.file.encode('utf-8')
         assert(len(self.file) > 3)
         for i in range(0,3):
-            self.outdir = os.path.join(self.outdir,self.file[i])
+            self.outdir = os.path.join(self.outdir,self.file[i].encode('utf-8'))
             if not os.path.isdir(self.outdir): os.mkdir(self.outdir)
-        self.path = os.path.join(self.outdir,self.file)
+        self.path = os.path.join(self.outdir,self.file.encode('utf-8'))
 
     def finalize(self):
-        f = open(self.path,"w")
-        self.image.writePng(f)
-        f.close()
+        self.image.save(self.path, "GIF", quality=100)
 
     def getPath(self):
         return self.path
@@ -102,9 +99,7 @@ class LabelImage(TextImage):
 
     def __init__(self, **kw):
         TextImage.__init__(self, **kw)
-        tim = gd.image((1,1))
-        t = tim.get_bounding_rect(self.font, int(self.size), 0.0, (0,int(self.size)), self.text.encode('utf-8'))
-        h=t[1]; w=t[4]; 
+        w,h = self._font.getsize(self.text.encode('utf-8'))
 
         self.init_dimensions(w,h)
         self.init_file()
@@ -114,28 +109,26 @@ class LabelImage(TextImage):
         self.init_image()
 
         x = self.get_left(w)
-        y = int((self.height + self.size)/2)
-        self.image.string_ttf(self.font,int(self.size),0.0,(x,y),self.text.encode('utf-8'),self.color)
-
+        y = int(self.padding[0]) + ((self.height - int(self.padding[0]) - h - int(self.padding[2])) / 2)
+        d = ImageDraw.Draw(self.image)
+        d.text((x,y),self.text, font=self._font, fill=self.color)
+        del(d)
         self.finalize()
 
 class PhraseImage(TextImage):
 
     def __init__(self, **kw):
         TextImage.__init__(self, **kw)
-
-        tim = gd.image((1,1))
 ##
         words = self.text.split()
         lines = []
-        t = tim.get_bounding_rect(self.font, int(self.size), 0.0, (0,int(self.size)), ' ')
-        spacew = t[4]; lineh = t[1]
+        spacew, lineh = self._font.getsize(u' ')
 
         line = ''
         linew = 0
         maxw = 0
         for word in words:
-            wordw = tim.get_bounding_rect(self.font, int(self.size), 0.0, (0, int(self.size)), word.encode('utf-8'))[4]
+            wordw = self._font.getsize(word.encode('utf-8'))[0]
             if linew + spacew + wordw > self.width:
                 lines.append((linew,line))
                 maxw = max(linew, maxw)
@@ -143,7 +136,7 @@ class PhraseImage(TextImage):
                 linew = wordw
             else:
                 line = line + ' ' + word
-                linew = tim.get_bounding_rect(self.font, int(self.size), 0.0, (0, int(self.size)), line.encode('utf-8'))[4]
+                linew = self._font.getsize(line.encode('utf-8'))[0]
         lines.append((linew, line))
 
         h = len(lines) * lineh
@@ -156,16 +149,19 @@ class PhraseImage(TextImage):
                 
         self.init_image()
 
-        y = self.padding[0] + lineh
+        y = self.padding[0]
+        d = ImageDraw.Draw(self.image)
         for (linew,text) in lines:
             x = self.get_left(linew)
             y = int(y)
-            self.image.string_ttf(self.font,int(self.size),0.0,(x,y),text.encode('utf-8'),self.color)
+            d.text((x,y), text, font=self._font, fill=self.color)
             y = y + lineh
+        del(d)
 
         self.finalize()
 
 if __name__ == '__main__':
     print LabelImage(text='Some test',force=True).getPath()
-    print LabelImage(text=u'èéëêøæü', force=True,file=u'èéëêøæü.png',color='#00ff00',padding=(5,10,20,30),debug=True).getPath()
-    print PhraseImage(text=u'أعلن وزير الخارجية الأمريكي السابق، كولين باول الأحد دعمه للمرشح الديمقراطي، باراك أوباما، مشيراً إلى انزعاجه من حملة المرشح الجمهوري للانتخابات الرئاسية، جون ماكين، في تركيزها على إثارة قضية أن أوباما مسلم.', force=True,file=u'arabic.png',color='#00ff00',padding=(5,10,20,30),debug=True, font='/usr/share/fonts/truetype/ttf-arabeyes/ae_AlMohanad.ttf', align="center").getPath()
+    print LabelImage(text=u'èéëêøæü', force=True,file=u'èéëêøæü.gif',color='#00ff00',padding=(5,10,20,30),debug=True).getPath()
+    print PhraseImage(text=u'أعلن وزير الخارجية الأمريكي السابق، كولين باول الأحد دعمه للمرشح الديمقراطي، باراك أوباما، مشيراً إلى انزعاجه من حملة المرشح الجمهوري للانتخابات الرئاسية، جون ماكين، في تركيزها على إثارة قضية أن أوباما مسلم.', force=True,file=u'arabic.gif',color='#00ff00',width=800, height=500, padding=(5,10,20,30),debug=True, font='/usr/share/fonts/truetype/ttf-arabeyes/ae_AlMohanad.ttf', align="center").getPath()
+    print PhraseImage(text=u'Vestibulum et ullamcorper nunc. Nullam vitae eleifend nibh. Aliquam pellentesque pellentesque eros vel vehicula. Nam accumsan magna at nisi hendrerit scelerisque. Ut quis quam nulla, in tempor urna. Proin non ornare enim. Morbi tellus lectus, accumsan vitae viverra non, ornare et libero.', force=True,file=u'ipsum.gif',color='#00ff00',width=800, height=500, padding=(5,10,20,30),debug=True, align="center").getPath()
