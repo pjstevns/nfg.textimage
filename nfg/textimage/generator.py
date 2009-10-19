@@ -4,10 +4,6 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 from hashlib import md5
 
-def color2rgb(color):
-    assert(color[0]=='#')
-    return (int(color[1:3],16),int(color[3:5],16),int(color[5:7],16))
-
 class TextImage:
 
     text='test'
@@ -22,6 +18,7 @@ class TextImage:
     font='/usr/share/fonts/truetype/freefont/FreeSans.ttf'
     debug=False
     force=False
+    type="gif"
     padding=(0,0,0,0)
 
     def __init__(self, **kw):
@@ -38,9 +35,11 @@ class TextImage:
         if kw.has_key('debug'): self.debug=kw['debug']
         if kw.has_key('force'): self.force=kw['force']
         if kw.has_key('padding'): self.padding=kw['padding'] 
+        if kw.has_key('type'): self.type=kw['type'].lower()
         if self.debug: self.force=self.debug=True
 
         assert(os.path.exists(self.font))
+        assert(self.type in ('gif','png'))
         self._font = ImageFont.truetype(self.font, int(self.size))
 
     def init_file(self):
@@ -56,7 +55,7 @@ class TextImage:
             hash.update(str(self.width))
             hash.update(str(self.height))
             hash.update(str(self.padding))
-            self.file = str(hash.hexdigest()) + '.gif'
+            self.file = str(hash.hexdigest()) + '.%s' % self.type
         self.build_path()
 
     def init_dimensions(self, w, h):
@@ -70,9 +69,8 @@ class TextImage:
     def init_image(self):
         if self.color[0] != '#': self.color='#000000'
         if self.bgcol[0] != '#': self.bgcol='#ffffff'
-        self.image = Image.new(mode='RGBA', size=(self.width, self.height), color=color2rgb(self.bgcol))
+        self.image = Image.new(mode='RGBA', size=(self.width, self.height), color=self.bgcol)
         self.image.info['quality'] = 100
-
 
     def get_left(self, linewidth):
         x = 0
@@ -90,7 +88,9 @@ class TextImage:
         self.path = os.path.join(self.outdir,self.file.encode('utf-8'))
 
     def finalize(self):
-        self.image.save(self.path, "GIF", quality=100)
+        if self.type=='gif':
+            self.image = self.image.convert('RGB').convert('P', palette=Image.ADAPTIVE)
+        self.image.save(self.path, self.type.upper(), quality=100)
 
     def getPath(self):
         return self.path
