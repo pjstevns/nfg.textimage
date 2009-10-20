@@ -11,6 +11,8 @@ def color2rgba(color):
 
 class TextImage:
 
+    _scale=3 # scaling factor for resizing with anti-aliasing
+
     text='test'
     file=''
     color=(0,0,0)
@@ -19,11 +21,11 @@ class TextImage:
     width=-1
     height=-1
     align='left'
-    size=12
+    size=20
     font='/usr/share/fonts/truetype/freefont/FreeSans.ttf'
     debug=False
     force=False
-    type="gif"
+    type="png"
     padding=(0,0,0,0)
 
     def __init__(self, **kw):
@@ -46,6 +48,12 @@ class TextImage:
 
         assert(os.path.exists(self.font))
         assert(self.type in ('gif','png'))
+        # scale-up
+        if self.width > 0: self.width *= self._scale
+        if self.height > 0: self.height *= self._scale
+        self.padding = tuple([ x*self._scale for x in self.padding ])
+        self.size *= self._scale
+
         self._font = ImageFont.truetype(self.font, int(self.size))
 
     def init_file(self):
@@ -68,7 +76,7 @@ class TextImage:
         if self.width == -1: self.width = w
         if self.height == -1: self.height = h
         minwidth = w+int(self.padding[1])+int(self.padding[3])
-        minheight = h+int(self.padding[0])+int(self.padding[2])+(self.size/2)
+        minheight = h+int(self.padding[0])+int(self.padding[2])
         self.width=int(max(minwidth,self.width))
         self.height=int(max(minheight,self.height))
 
@@ -92,11 +100,27 @@ class TextImage:
             if not os.path.isdir(self.outdir): os.mkdir(self.outdir)
         self.path = os.path.join(self.outdir,self.file.encode('utf-8'))
 
+    def get_transparency(self):
+        """ lookup the index for the background color in the palette"""
+        p = self.image.getpalette()
+        if not p: return 0
+        t = []
+        for i in range(0,255):
+            j = i*3
+            t.append((p[j],p[j+1],p[j+2]))
+        return t.index(color2rgba(self.bgcol)[:3])
+
     def finalize(self):
+        #self.image = ImageOps.crop(self.image,border=1)
+        # scale-down
+        (x,y) = ((self.width/self._scale), (self.height/self._scale))
+        self.image = self.image.resize((x,y), Image.ANTIALIAS) 
+
         if self.type=='gif':
             self.image = self.image.convert('RGB').convert('P', palette=Image.ADAPTIVE)
-        self.image = ImageOps.crop(self.image,border=1)
-        self.image.save(self.path, self.type.upper(), quality=100)
+            self.image.save(self.path, self.type.upper(), transparency=self.get_transparency())
+        else:
+            self.image.save(self.path, self.type.upper(), quality=100)
 
     def getPath(self):
         return self.path
@@ -168,6 +192,7 @@ class PhraseImage(TextImage):
 
 if __name__ == '__main__':
     print LabelImage(text='Some test',force=True).getPath()
+    print LabelImage(text='Some test',bgcol="#00FF00", type="gif", force=True).getPath()
     print LabelImage(text=u'èéëêøæü', force=True,file=u'èéëêøæü.gif',color='#00ff00',padding=(5,10,20,30),debug=True).getPath()
     print PhraseImage(text=u'أعلن وزير الخارجية الأمريكي السابق، كولين باول الأحد دعمه للمرشح الديمقراطي، باراك أوباما، مشيراً إلى انزعاجه من حملة المرشح الجمهوري للانتخابات الرئاسية، جون ماكين، في تركيزها على إثارة قضية أن أوباما مسلم.', force=True,file=u'arabic.gif',color='#00ff00',width=800, height=500, padding=(5,10,20,30),debug=True, font='/usr/share/fonts/truetype/ttf-arabeyes/ae_AlMohanad.ttf', align="center").getPath()
     print PhraseImage(text=u'Vestibulum et ullamcorper nunc. Nullam vitae eleifend nibh. Aliquam pellentesque pellentesque eros vel vehicula. Nam accumsan magna at nisi hendrerit scelerisque. Ut quis quam nulla, in tempor urna. Proin non ornare enim. Morbi tellus lectus, accumsan vitae viverra non, ornare et libero.', force=True,file=u'ipsum.gif',color='#00ff00',width=800, height=500, padding=(5,10,20,30),debug=True, align="center").getPath()
